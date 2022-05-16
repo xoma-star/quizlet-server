@@ -84,12 +84,8 @@ export class VKClients{
         Object.keys(this.queues).forEach(v => {
             //@ts-ignore
             Object.keys(this.queues[v]).forEach(x => {
-                let i = 0;
-                while(i < x.length){
-                    //@ts-ignore
-                    if(this.queues[v][x][i] === id) this.queues[v][x].splice(i, 1);
-                    else ++i
-                }
+                //@ts-ignore
+                this.queues[v][x] = this.queues[v][x].filter((x: string) => x === id)
             })
         })
     }
