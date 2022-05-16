@@ -80,7 +80,7 @@ export class VKClients{
         return snap?.data()?.preferredThemes
     }
 
-    async removeFromQueue(id: string){
+    removeFromQueue(id: string){
         Object.keys(this.queues).forEach(v => {
             //@ts-ignore
             Object.keys(this.queues[v]).forEach(x => {
@@ -142,8 +142,10 @@ export class VKClients{
                         if(this.queues[v][x].length === 2){
                             const room = this.createRoom(this.queues[v][x], x)
                             this.queues[v][x].forEach(z => {
+                                console.log('before: ', this.queues)
                                 setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
                                 this.removeFromQueue(z)
+                                console.log('after: ', this.queues)
                             })
                             break
                             break
