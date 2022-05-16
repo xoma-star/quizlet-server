@@ -2,7 +2,11 @@ import { Server } from 'socket.io'
 import onConnect from "./functions/onConnect";
 import {VKClients} from "./VKClient";
 
-const io = new Server(5000, {
+let PORT = 5000
+
+if(typeof process.env.PORT !== 'undefined') PORT = parseInt(process.env.PORT)
+
+const io = new Server(PORT, {
     cors: {
         origin: '*'
     }
