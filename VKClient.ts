@@ -1,7 +1,8 @@
 import {Socket} from 'socket.io'
 import {firestore} from "./firebase";
-import {doc, getDoc, updateDoc} from 'firebase/firestore'
+import {collection, doc, getDoc, getDocs, updateDoc} from 'firebase/firestore'
 import sleep from "./functions/sleep";
+import similarity from "./functions/similarity";
 
 export interface VKClient{
     vkid: string,
@@ -95,7 +96,6 @@ export class VKClients{
                 this.queues[v][x] = this.queues[v][x].filter((x: string) => x !== id)
             })
         })
-        console.log(this.queues)
     }
 
     updateRoomData(room: string, data: any){
@@ -131,6 +131,9 @@ export class VKClients{
                 this.broadcastRoom(data.room, 'updatedRoomData', this.rooms[i])
                 break
             case 'enter':
+                if(similarity(activeQuestion.answer, String(data.answer)) > 0.7) this.rooms[i].questions[this.rooms[i].activeQuestion].answeredRight.push(data.player)
+                else this.rooms[i].questions[this.rooms[i].activeQuestion].answeredWrong.push(data.player)
+                this.broadcastRoom(data.room, 'updatedRoomData', this.rooms[i])
                 break
         }
     }
@@ -148,41 +151,17 @@ export class VKClients{
         }
     }
 
-    createRoom(players: string[], theme: string, mode: string){
+    async createRoom(players: string[], theme: string, mode: string){
         const roomID = Date.now().toString() + players[0]
         this.rooms.push({
             activeQuestion: -1,
             id: roomID,
             players: players.map(v => {return {id: v}}),
-            questions: [{
-                type: 'select',
-                text: 'Гнидой был Ленин. А кто еще был пидором?',
-                time: 10,
-                answers: [
-                    {text: 'Пыня', right: true},
-                    {text: 'Сталин', right: false},
-                    {text: 'Пушник', right: false},
-                    {text: 'GAME_SEARCH', right: false}
-                ],
-                answeredRight: [],
-                answeredWrong: []
-            },
-                {
-                    type: 'select',
-                    text: 'Гнидой был Сталин. А кто еще был пидором?',
-                    time: 10,
-                    answers: [
-                        {text: 'Пыня', right: true},
-                        {text: 'Сталин', right: false},
-                        {text: 'Пушник', right: false},
-                        {text: 'GAME_SEARCH', right: false}
-                    ],
-                    answeredRight: [],
-                    answeredWrong: []
-                }],
+            questions: (await getDocs(collection(firestore, 'themes', theme, 'questions'))).docs.map(x => {return {...x.data(), answeredRight: [], answeredWrong: []}}),
             theme: theme,
             mode: mode
         })
+        console.log(this.rooms)
         return roomID
     }
 
@@ -199,10 +178,11 @@ export class VKClients{
                     this.queues[v][x].push(vkid)
                     switch (v){
                         case "one":
-                            const room = this.createRoom(this.queues[v][x], x, v)
-                            this.queues[v][x].forEach(z => {
-                                setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
-                                this.removeFromQueue(z)
+                            this.createRoom(this.queues[v][x], x, v).then(room => {
+                                this.queues[v][x].forEach(z => {
+                                    setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
+                                    this.removeFromQueue(z)
+                                })
                             })
                             throw {}
                         case "oneVSall":
@@ -229,7 +209,7 @@ export class VKClients{
                 })
             })
         }
-        catch {}
+        catch(e) {}
         await updateDoc(doc(firestore, 'users', this.getVKID(id)), {preferredThemes: data.themesSelected})
         callback()
     }
