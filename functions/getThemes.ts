@@ -1,7 +1,7 @@
 import { getDocs, collection } from 'firebase/firestore'
 import { firestore } from '../firebase'
 
-const themes = [
+export const themes = [
     {id: 'history', name: 'История'},
     {id: 'math', name: 'Математика'},
     {id: 'english', name: 'Английский язык'},
@@ -10,11 +10,11 @@ const themes = [
     {id: 'tech', name: 'Технологии'}
 ]
 
-const getThemes = async () => {
+export const getThemes = () => {
     // let themes: {id: string, name: string}[] = []
     // const docs = await getDocs(collection(firestore,'themes'))
     // docs.forEach(v => themes.push({id: v.id, name: v.data().name}))
     return themes
 }
-
-export default getThemes
+//
+// export default getThemes

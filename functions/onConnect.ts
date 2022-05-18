@@ -1,5 +1,5 @@
 import {Socket} from "socket.io";
-import getThemes from "./getThemes";
+import {getThemes} from "./getThemes";
 import {VKClient, VKClients} from "../VKClient";
 
 const onConnect = (client: Socket, clients: VKClients) => {
@@ -13,6 +13,8 @@ const onConnect = (client: Socket, clients: VKClients) => {
     client.on('queue', (data, callback) => clients.insertQueue(data, callback, client.id))
     client.on('addPlayerDataToRoom', (data, callback) => clients.addUserDataToRoom(data, callback))
     client.on('disconnect', () => clients.removeClient(client))
+    client.on('exitQueue', (data) => clients.removeFromQueue(data.id))
+    client.on('answerQuestion', (data) => clients.playerAnswered(data))
 }
 
 export default onConnect

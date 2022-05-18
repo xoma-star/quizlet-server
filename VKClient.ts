@@ -33,7 +33,8 @@ interface room{
     players: playerInRoom[],
     questions: any[],
     theme: string,
-    mode: string
+    mode: string,
+    activeQuestion: number
 }
 
 export class VKClients{
@@ -54,6 +55,8 @@ export class VKClients{
     removeClient(client: Socket){
         const socketID = client.id
         const vkid = this.clients.find(x => x.socket.id === socketID)?.vkid
+        if(typeof vkid === 'undefined') return
+        this.removeFromQueue(vkid)
 
         let i = 0
         while(i < this.clients.length){
@@ -109,9 +112,26 @@ export class VKClients{
     }
 
     async playRoom(room: room){
-        for (const x of room.questions) {
-            this.broadcastRoom(room.id, 'newQuestion', {question: x})
-            await sleep(x.time * 1000)
+        for(let i = 0; i < room.questions.length; i++){
+            // this.broadcastRoom(room.id, 'newQuestion', {question: x})
+            let v = this.rooms.findIndex(x => x.id === room.id)
+            this.rooms[v].activeQuestion = i
+            this.broadcastRoom(room.id, 'updatedRoomData', this.rooms[v])
+            await sleep(room.questions[i].time * 1000 + 500)
+        }
+    }
+
+    playerAnswered(data: {room: string, player: string, answer: string | number}){
+        let i = this.rooms.findIndex(x => x.id === data.room)
+        const activeQuestion = this.rooms[i].questions[this.rooms[i].activeQuestion]
+        switch (activeQuestion.type){
+            case 'select':
+                if(activeQuestion.answers[data.answer].right) this.rooms[i].questions[this.rooms[i].activeQuestion].answeredRight.push(data.player)
+                else this.rooms[i].questions[this.rooms[i].activeQuestion].answeredWrong.push(data.player)
+                this.broadcastRoom(data.room, 'updatedRoomData', this.rooms[i])
+                break
+            case 'enter':
+                break
         }
     }
 
@@ -124,13 +144,14 @@ export class VKClients{
         this.broadcastRoom(this.rooms[r].id, 'updatedRoomData', this.rooms[r])
         if(!this.rooms[r].players.every((x) => typeof x.ava === 'undefined')) {
             this.broadcastRoom(this.rooms[r].id, 'roomReady')
-            setTimeout(() => this.playRoom(this.rooms[r]), 5000)
+            setTimeout(() => {this.playRoom(this.rooms[r])}, 5000)
         }
     }
 
     createRoom(players: string[], theme: string, mode: string){
         const roomID = Date.now().toString() + players[0]
         this.rooms.push({
+            activeQuestion: -1,
             id: roomID,
             players: players.map(v => {return {id: v}}),
             questions: [{
@@ -142,18 +163,22 @@ export class VKClients{
                     {text: 'Сталин', right: false},
                     {text: 'Пушник', right: false},
                     {text: 'GAME_SEARCH', right: false}
-                ]
+                ],
+                answeredRight: [],
+                answeredWrong: []
             },
                 {
                     type: 'select',
-                    text: 'Гнидой был Ленин. А кто еще был пидором?',
+                    text: 'Гнидой был Сталин. А кто еще был пидором?',
                     time: 10,
                     answers: [
                         {text: 'Пыня', right: true},
                         {text: 'Сталин', right: false},
                         {text: 'Пушник', right: false},
                         {text: 'GAME_SEARCH', right: false}
-                    ]
+                    ],
+                    answeredRight: [],
+                    answeredWrong: []
                 }],
             theme: theme,
             mode: mode
