@@ -170,8 +170,11 @@ export class VKClients{
         let b = this.rooms[r].players.findIndex(x => x.id === data.id)
         this.rooms[r].players[b] = a
         callback()
-        this.broadcastRoom(this.rooms[r].id, 'updatedRoomData', this.rooms[r])
-        if(!this.rooms[r].players.every((x) => typeof x.ava === 'undefined')) {
+        this.broadcastRoom(this.rooms[r].id, 'updatedRoomData', {
+            ...this.rooms[r],
+            questions: []
+        })
+        if(!this.rooms[r].players.every((x) => typeof x.ava !== 'undefined')) {
             this.broadcastRoom(this.rooms[r].id, 'roomReady')
             setTimeout(() => {this.playRoom(this.rooms[r])}, 5000)
         }
