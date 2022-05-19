@@ -9,10 +9,31 @@ export interface VKClient{
     socket: Socket
 }
 
-interface IQ{
-    id: string,
-    themes: string[]
+interface Question{
+    author?: string,
+    image?: string,
+    text: string,
+    time: number,
+    answeredRight: string[],
+    answeredWrong: string[]
 }
+
+interface SelectAnswers{
+    text: string,
+    right?: boolean
+}
+
+interface QuestionSelect extends Question{
+    type: 'select',
+    answers: SelectAnswers[]
+}
+
+interface QuestionEnter extends Question{
+    type: 'enter',
+    answer?: string
+}
+
+type QuestionType = QuestionSelect | QuestionEnter
 
 interface queues {
     oneVSall: {[k: string]: string[]},
@@ -32,7 +53,7 @@ interface playerInRoom{
 interface room{
     id: string,
     players: playerInRoom[],
-    questions: any[],
+    questions: QuestionType[],
     theme: string,
     mode: string,
     activeQuestion: number
@@ -98,25 +119,29 @@ export class VKClients{
         })
     }
 
-    updateRoomData(room: string, data: any){
-        for(let i = 0; i < this.rooms.length; i++){
-            if(this.rooms[i].id === room){
-                this.rooms[i] = {...this.rooms[i], ...data}
-                return
-            }
-        }
-    }
-
     broadcastRoom(room: string, message: string, data?: any){
         this.rooms.find(x => x.id === room)?.players.forEach(x => this.sendToClient(x.id, message, data))
     }
 
+    sendQuestion(question: QuestionType, room: string){
+        let clientQuestion
+        if(question.type === 'select') clientQuestion = {
+            ...question,
+            answers: question.answers.map(x => {return {text: x.text}})
+        }
+        if(question.type === 'enter') clientQuestion = {
+            ...question,
+            answer: ''
+        }
+        this.broadcastRoom(room, 'newQuestion', {question: clientQuestion})
+    }
+
     async playRoom(room: room){
         for(let i = 0; i < room.questions.length; i++){
-            // this.broadcastRoom(room.id, 'newQuestion', {question: x})
             let v = this.rooms.findIndex(x => x.id === room.id)
             this.rooms[v].activeQuestion = i
-            this.broadcastRoom(room.id, 'updatedRoomData', this.rooms[v])
+            this.sendQuestion(this.rooms[v].questions[i], room.id)
+            // this.broadcastRoom(room.id, 'updatedRoomData', this.rooms[v])
             await sleep(room.questions[i].time * 1000 + 500)
         }
     }
@@ -126,16 +151,17 @@ export class VKClients{
         const activeQuestion = this.rooms[i].questions[this.rooms[i].activeQuestion]
         switch (activeQuestion.type){
             case 'select':
+                if(typeof data.answer !== 'number') return
                 if(activeQuestion.answers[data.answer].right) this.rooms[i].questions[this.rooms[i].activeQuestion].answeredRight.push(data.player)
                 else this.rooms[i].questions[this.rooms[i].activeQuestion].answeredWrong.push(data.player)
-                this.broadcastRoom(data.room, 'updatedRoomData', this.rooms[i])
                 break
             case 'enter':
+                if(typeof activeQuestion?.answer === 'undefined') return
                 if(similarity(activeQuestion.answer, String(data.answer)) > 0.7) this.rooms[i].questions[this.rooms[i].activeQuestion].answeredRight.push(data.player)
                 else this.rooms[i].questions[this.rooms[i].activeQuestion].answeredWrong.push(data.player)
-                this.broadcastRoom(data.room, 'updatedRoomData', this.rooms[i])
                 break
         }
+        this.sendQuestion(this.rooms[i].questions[this.rooms[i].activeQuestion], data.room)
     }
 
     async addUserDataToRoom(data: {id: string, name: string, ava: string, room: string}, callback: () => void){
@@ -157,11 +183,11 @@ export class VKClients{
             activeQuestion: -1,
             id: roomID,
             players: players.map(v => {return {id: v}}),
-            questions: (await getDocs(collection(firestore, 'themes', theme, 'questions'))).docs.map(x => {return {...x.data(), answeredRight: [], answeredWrong: []}}),
+            questions: (await getDocs(collection(firestore, 'themes', theme, 'questions'))).docs.
+            map(x => { return {...x.data() as QuestionType, answeredRight: [], answeredWrong: []}}),
             theme: theme,
             mode: mode
         })
-        console.log(this.rooms)
         return roomID
     }
 
