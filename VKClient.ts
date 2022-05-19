@@ -9,6 +9,23 @@ export interface VKClient{
     socket: Socket
 }
 
+enum possibleQueues {
+    ONE_VS_ALL = 'oneVSall',
+    ONE_VS_ONE = 'oneVSone',
+    TEAM_VS_TEAM = 'teamVSteam',
+    SOLO = 'one',
+    TEAM_VS_TEAMS = 'teamVSall'
+}
+
+enum possibleThemes {
+    'history',
+    'english',
+    'geo',
+    'math',
+    'russian',
+    'tech'
+}
+
 interface Question{
     author?: string,
     image?: string,
@@ -35,12 +52,8 @@ interface QuestionEnter extends Question{
 
 type QuestionType = QuestionSelect | QuestionEnter
 
-interface queues {
-    oneVSall: {[k: string]: string[]},
-    oneVSone: {[k: string]: string[]},
-    teamVSteam: {[k: string]: string[]},
-    teamVSall: {[k: string]: string[]},
-    one: {[k: string]: string[]}
+type queues = {
+    [key in possibleQueues]: {[key in possibleThemes]?: string[]}
 }
 
 interface playerInRoom{
@@ -62,11 +75,11 @@ interface room{
 export class VKClients{
     clients: VKClient[] = []
     queues: queues = {
-        oneVSall: {},
-        oneVSone: {},
-        teamVSteam: {},
-        teamVSall: {},
-        one: {}
+        [possibleQueues.SOLO]: {},
+        [possibleQueues.ONE_VS_ALL]: {},
+        [possibleQueues.ONE_VS_ONE]: {},
+        [possibleQueues.TEAM_VS_TEAM]: {},
+        [possibleQueues.TEAM_VS_TEAMS]: {}
     }
     rooms: room[] = []
 
@@ -110,13 +123,18 @@ export class VKClients{
     }
 
     removeFromQueue(id: string){
-        Object.keys(this.queues).forEach(v => {
-            //@ts-ignore
-            Object.keys(this.queues[v]).forEach(x => {
-                //@ts-ignore
-                this.queues[v][x] = this.queues[v][x].filter((x: string) => x !== id)
-            })
-        })
+        for(let v in this.queues){
+            let x = v as keyof queues
+            for(let z in this.queues[x]){
+                let y = z as unknown as keyof queues[typeof x]
+                this.queues[x][y] = this.queues[x][y]?.filter((u: string) => u !== id)
+            }
+        }
+        // Object.entries(this.queues).forEach(([v, i]) => {
+        //     Object.entries(this.queues[v]).forEach(x => {
+        //         this.queues[v][x] = this.queues[v][x].filter((x: string) => x !== id)
+        //     })
+        // })
     }
 
     broadcastRoom(room: string, message: string, data?: any){
@@ -144,6 +162,7 @@ export class VKClients{
             // this.broadcastRoom(room.id, 'updatedRoomData', this.rooms[v])
             await sleep(room.questions[i].time * 1000 + 500)
         }
+        this.broadcastRoom(room.id, 'gameOver')
     }
 
     playerAnswered(data: {room: string, player: string, answer: string | number}){
@@ -174,65 +193,40 @@ export class VKClients{
             ...this.rooms[r],
             questions: []
         })
-        if(!this.rooms[r].players.every((x) => typeof x.ava !== 'undefined')) {
+        if(this.rooms[r].players.every((x) => typeof x.ava !== 'undefined')) {
             this.broadcastRoom(this.rooms[r].id, 'roomReady')
             setTimeout(() => {this.playRoom(this.rooms[r])}, 5000)
         }
     }
 
-    async createRoom(players: string[], theme: string, mode: string){
+    async createRoom(players: string[], theme: possibleThemes, mode: possibleQueues){
         const roomID = Date.now().toString() + players[0]
+        let th = theme as unknown as string
         this.rooms.push({
             activeQuestion: -1,
             id: roomID,
             players: players.map(v => {return {id: v}}),
-            questions: (await getDocs(collection(firestore, 'themes', theme, 'questions'))).docs.
+            questions: (await getDocs(collection(firestore, 'themes', th, 'questions'))).docs.
             map(x => { return {...x.data() as QuestionType, answeredRight: [], answeredWrong: []}}),
-            theme: theme,
+            theme: th,
             mode: mode
         })
-        console.log(this.rooms)
         return roomID
     }
 
-    checkQueue(){
-
-    }
-
-    async insertQueue(data: {modesSelected: ('oneVSone' | 'oneVSall' | 'teamVSall' | 'teamVSteam' | 'one')[], themesSelected: string[]}, callback: () => void, id: string){
+    async insertQueue(data: {modesSelected: possibleQueues[], themesSelected: possibleThemes[]}, callback: () => void, id: string){
         const vkid = this.getVKID(id)
         try{
             data.modesSelected.forEach(v => {
                 data.themesSelected.forEach(x => {
                     if(typeof this.queues[v][x] === 'undefined') this.queues[v][x] = []
-                    this.queues[v][x].push(vkid)
+                    this.queues[v][x]?.push(vkid)
                     switch (v){
-                        case "one":
-                            this.createRoom(this.queues[v][x], x, v).then(room => {
-                                this.queues[v][x].forEach(z => {
-                                    setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
-                                    this.removeFromQueue(z)
-                                })
-                            })
-                            throw {}
-                        case "oneVSall":
-                            if(this.queues[v][x].length === 5){
-                                this.queues[v][x].forEach(z => this.sendToClient(z, 'foundGame'))
-                                return
-                            }
+                        case "one": throw {v: v, x: x}
+                        case "oneVSall": if(this.queues[v][x]?.length === 5) throw {v: v, x: x}
                             break
-                        case "teamVSall":
-                            break
-                        case "oneVSone":
-                            if(this.queues[v][x].length === 2){
-                                this.createRoom(this.queues[v][x], x, v).then(room => {
-                                    this.queues[v][x].forEach(z => {
-                                        setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
-                                        this.removeFromQueue(z)
-                                    })
-                                })
-                                throw {}
-                            }
+                        case "teamVSall": break
+                        case "oneVSone": if(this.queues[v][x]?.length === 2)throw {v: v, x: x}
                             break
                         case "teamVSteam":
                             break
@@ -240,7 +234,18 @@ export class VKClients{
                 })
             })
         }
-        catch(e) {}
+        catch(e: any) {
+            if(e.v && e.x){
+                let a: {v: possibleQueues, x: possibleThemes} = {v: e.v, x: e.x}
+                let b = this.queues[a.v][a.x] as string[]
+                this.createRoom(b, a.x, a.v).then(room => {
+                    this.queues[a.v][a.x]?.forEach(z => {
+                        setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
+                        this.removeFromQueue(z)
+                    })
+                })
+            }
+        }
         await updateDoc(doc(firestore, 'users', this.getVKID(id)), {preferredThemes: data.themesSelected})
         callback()
     }
