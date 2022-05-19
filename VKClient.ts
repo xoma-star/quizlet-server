@@ -42,12 +42,14 @@ interface SelectAnswers{
 
 interface QuestionSelect extends Question{
     type: 'select',
-    answers: SelectAnswers[]
+    answers: SelectAnswers[],
+    usersAnswers: {id: string, answer: number}[]
 }
 
 interface QuestionEnter extends Question{
     type: 'enter',
-    answer?: string
+    answer: string,
+    usersAnswers: {id: string, answer: string}[]
 }
 
 type QuestionType = QuestionSelect | QuestionEnter
@@ -162,25 +164,35 @@ export class VKClients{
             // this.broadcastRoom(room.id, 'updatedRoomData', this.rooms[v])
             await sleep(room.questions[i].time * 1000 + 500)
         }
-        this.broadcastRoom(room.id, 'gameOver')
+        this.broadcastRoom(room.id, 'updatedRoomData', this.rooms.find(x => x.id === room.id))
+        this.removeRoom(room.id)
+    }
+
+    removeRoom(id: string) {
+        let i = this.rooms.findIndex(x => x.id === id)
+        this.rooms.splice(i, 1)
     }
 
     playerAnswered(data: {room: string, player: string, answer: string | number}){
         let i = this.rooms.findIndex(x => x.id === data.room)
-        const activeQuestion = this.rooms[i].questions[this.rooms[i].activeQuestion]
-        switch (activeQuestion.type){
+        const k = this.rooms[i].activeQuestion
+        let a = {...this.rooms[i].questions[k]}
+        switch (a.type){
             case 'select':
                 if(typeof data.answer !== 'number') return
-                if(activeQuestion.answers[data.answer].right) this.rooms[i].questions[this.rooms[i].activeQuestion].answeredRight.push(data.player)
-                else this.rooms[i].questions[this.rooms[i].activeQuestion].answeredWrong.push(data.player)
+                if(a.answers[data.answer].right) a.answeredRight.push(data.player)
+                else a.answeredWrong.push(data.player)
+                a.usersAnswers.push({id: data.player, answer: data.answer})
                 break
             case 'enter':
-                if(typeof activeQuestion?.answer === 'undefined') return
-                if(similarity(activeQuestion.answer, String(data.answer)) > 0.7) this.rooms[i].questions[this.rooms[i].activeQuestion].answeredRight.push(data.player)
-                else this.rooms[i].questions[this.rooms[i].activeQuestion].answeredWrong.push(data.player)
+                if(typeof data.answer !== 'string') return
+                if(similarity(a.answer, String(data.answer)) > 0.7) a.answeredRight.push(data.player)
+                else a.answeredWrong.push(data.player)
+                a.usersAnswers.push({id: data.player, answer: data.answer})
                 break
         }
-        this.sendQuestion(this.rooms[i].questions[this.rooms[i].activeQuestion], data.room)
+        this.rooms[i].questions[k] = a
+        this.sendQuestion(a, data.room)
     }
 
     async addUserDataToRoom(data: {id: string, name: string, ava: string, room: string}, callback: () => void){
@@ -207,7 +219,7 @@ export class VKClients{
             id: roomID,
             players: players.map(v => {return {id: v}}),
             questions: (await getDocs(collection(firestore, 'themes', th, 'questions'))).docs.
-            map(x => { return {...x.data() as QuestionType, answeredRight: [], answeredWrong: []}}),
+            map(x => { return {...x.data() as QuestionType, usersAnswers: [], answeredRight: [], answeredWrong: []}}),
             theme: th,
             mode: mode
         })
