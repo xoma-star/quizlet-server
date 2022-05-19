@@ -188,6 +188,7 @@ export class VKClients{
             theme: theme,
             mode: mode
         })
+        console.log(this.rooms)
         return roomID
     }
 
@@ -221,10 +222,11 @@ export class VKClients{
                             break
                         case "oneVSone":
                             if(this.queues[v][x].length === 2){
-                                const room = this.createRoom(this.queues[v][x], x, v)
-                                this.queues[v][x].forEach(z => {
-                                    setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
-                                    this.removeFromQueue(z)
+                                this.createRoom(this.queues[v][x], x, v).then(room => {
+                                    this.queues[v][x].forEach(z => {
+                                        setTimeout(() => this.sendToClient(z, 'foundGame', {room: room}), 1000)
+                                        this.removeFromQueue(z)
+                                    })
                                 })
                                 throw {}
                             }
