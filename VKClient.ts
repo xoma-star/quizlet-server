@@ -32,7 +32,8 @@ interface Question{
     text: string,
     time: number,
     answeredRight: string[],
-    answeredWrong: string[]
+    answeredWrong: string[],
+    rand: number
 }
 
 interface SelectAnswers{
@@ -203,7 +204,8 @@ export class VKClients{
         callback()
         this.broadcastRoom(this.rooms[r].id, 'updatedRoomData', {
             ...this.rooms[r],
-            questions: []
+            questions: [],
+            usersAnswers: []
         })
         if(this.rooms[r].players.every((x) => typeof x.ava !== 'undefined')) {
             this.broadcastRoom(this.rooms[r].id, 'roomReady')
@@ -219,7 +221,12 @@ export class VKClients{
             id: roomID,
             players: players.map(v => {return {id: v}}),
             questions: (await getDocs(collection(firestore, 'themes', th, 'questions'))).docs.
-            map(x => { return {...x.data() as QuestionType, usersAnswers: [], answeredRight: [], answeredWrong: []}}),
+            map(x => { return {...x.data() as QuestionType, usersAnswers: [], answeredRight: [], answeredWrong: [], rand: Math.random()}}).
+            sort((a, b) => {
+                if(a.rand > b.rand) return 1
+                if(a.rand === b.rand) return 1
+                return -1
+            }),
             theme: th,
             mode: mode
         })
